@@ -1,0 +1,335 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../database/storage_fire.dart';
+import '../../models/doctor_models/profile_model.dart';
+import '../../provider/doctor_provider/profile_provider.dart';
+import '../../provider/provider_language.dart';
+import '../../theme.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import '../../widgets/text_fild.dart';
+
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final Storage storage = Storage();
+  final ValueNotifier<String> _imageUrl = ValueNotifier(
+      'https://cdn.icon-icons.com/icons2/2643/PNG/512/male_boy_person_people_avatar_icon_159358.png');
+  bool visible = false;
+  bool readonly = true;
+  late TextEditingController phoneController;
+  late TextEditingController otherPhoneController;
+  late TextEditingController heightController;
+  late TextEditingController weightController;
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    otherPhoneController = TextEditingController();
+    phoneController = TextEditingController();
+    heightController = TextEditingController();
+    weightController = TextEditingController();
+    Provider.of<ProfileProvider>(context, listen: false).getTask();
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    super.dispose();
+    otherPhoneController.dispose();
+    phoneController.dispose();
+    heightController.dispose();
+    weightController.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          AppLocalizations.of(context)!.profile,
+          style: const TextStyle(color: blueClr),
+          textAlign: TextAlign.start,
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.language_outlined, color: blueClr),
+            onPressed: () {
+              Provider.of<LanguageProvider>(context, listen: false)
+                  .changeLanguage();
+            },
+          ),
+          IconButton(
+            onPressed: () async{
+              await confirmLogOut();
+            },
+            icon: const Icon(
+              Icons.logout_outlined,
+              color: blueClr,
+            ),
+          ),
+          const SizedBox(width: 20),
+        ],
+      ),
+      body:
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: SingleChildScrollView(
+          child: FutureBuilder(
+              future: _fetch(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  return FutureProvider(
+                      initialData: [],
+                      create: (context) =>
+                          Provider.of<ProfileProvider>(context, listen: false)
+                              .getTask(),
+                      child: Consumer<ProfileProvider>(
+                        builder: (context, task, child) {
+                          var profile =
+                              Provider.of<ProfileProvider>(context).listTask;
+
+                          return Column(
+                            children: [
+                              const SizedBox(height: 2),
+                              ValueListenableBuilder(
+                                  valueListenable: _imageUrl,
+                                  builder: (context, String? value, child) {
+                                    return Container(
+                                      height: 150,
+                                      width: 150,
+                                      child: Visibility(
+                                        visible: visible,
+                                        child: Align(
+                                          alignment: Alignment.bottomRight,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 5, vertical: 5),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                  color: greenClr, width: 2),
+                                            ),
+                                            child: IconButton(
+                                              onPressed: () async {
+                                                final result = await FilePicker
+                                                    .platform
+                                                    .pickFiles(
+                                                  allowMultiple: false,
+                                                  type: FileType.custom,
+                                                  allowedExtensions: [
+                                                    'jpg',
+                                                    'png',
+                                                    'jpeg',
+                                                  ],
+                                                );
+                                                if (result == null) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(SnackBar(
+                                                      content: Text(
+                                                          AppLocalizations.of(
+                                                              context)!
+                                                              .no_file_selected)));
+                                                  return;
+                                                }
+                                                final path =
+                                                result.files.single.path!;
+                                                final filename =
+                                                    result.files.single.name;
+                                                storage
+                                                    .uploadImage(path, filename);
+
+                                                _imageUrl.value = await storage
+                                                    .getImage(filename);
+                                              },
+                                              icon: const Icon(
+                                                Icons.camera_alt_outlined,
+                                                size: 36,
+                                                color: blueClr,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        image: DecorationImage(
+                                          image: NetworkImage(
+                                            profile[0].image.toString(),
+                                          ),
+                                          fit: BoxFit.cover,
+                                        ),
+                                        border: Border.all(
+                                            color: greenClr, width: 2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    );
+                                  }),
+                              const SizedBox(height: 30),
+                              const SizedBox(height: 30),
+                              TextInput(
+                                readOnly: true,
+                                label: AppLocalizations.of(context)!.user_name,
+                                hint: profile[0].name,
+                              ),
+                              const SizedBox(height: 30),
+                              TextInput(
+                                label: AppLocalizations.of(context)!.birthday,
+                                readOnly: true,
+                                hint: profile[0].birthday,
+                              ),
+                            ],
+                          );
+                        },
+                      ));
+                }
+                return const Center(child: CircularProgressIndicator());
+              }),
+        ),
+      ),
+    );
+  }
+
+
+
+
+
+
+
+
+  _updateProfile({
+    required var profile,
+    required String? height,
+    required String? otherPhone,
+    required String? phone,
+    required String? weight,
+    required String? image,
+  }) async {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (height != "") {
+      await FirebaseFirestore.instance
+          .collection('UserData')
+          .doc(firebaseUser!.uid)
+          .update({
+        'height': height,
+      });
+      profile.height =height;
+    }
+    if (otherPhone != "") {
+      await FirebaseFirestore.instance
+          .collection('UserData')
+          .doc(firebaseUser!.uid)
+          .update({
+        'otherPhone': otherPhone,
+      });
+      profile.other =otherPhone;
+
+    }
+
+    if (phone != "") {
+      await FirebaseFirestore.instance
+          .collection('UserData')
+          .doc(firebaseUser!.uid)
+          .update({
+        'phone': phone,
+      });
+      profile.phone = phone;
+
+    }
+    if (weight != "") {
+      await FirebaseFirestore.instance
+          .collection('UserData')
+          .doc(firebaseUser!.uid)
+          .update({
+        'weight': weight,
+      });
+      profile.wight = weight;
+
+    }
+
+    if (image != "https://cdn.icon-icons.com/icons2/2643/PNG/512/male_boy_person_people_avatar_icon_159358.png") {
+      await FirebaseFirestore.instance
+          .collection('UserData')
+          .doc(firebaseUser!.uid)
+          .update({
+        'image': image,
+      });
+      //  I dont know if the under code is work or not test image update
+      setState(() {
+        profile.image = image;
+      });
+    }
+    Provider.of<ProfileProvider>(context,listen: false).getTask();
+  }
+
+  _fetch() async {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser != null) {
+      await FirebaseFirestore.instance
+          .collection('UserData')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .get()
+          .then((ds) async {
+        try {
+          await Provider.of<ProfileProvider>(context, listen: false).
+          addTask(
+              task: Profile(
+                name: ds.data()!['name'],
+                birthday: ds.data()!['birth'],
+                image: ds.data()!['image'],
+                medical_specialty: ds.data()!['medical_specialty']
+              ));
+        } catch (e) {
+          debugPrint("error $e");
+        }
+      }).catchError((e) {});
+    }
+  }
+
+  Future<void> cleared() async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacementNamed(context, '/login_screen');
+  }
+  Future<void> confirmLogOut() async {
+    bool? clearedConf = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(AppLocalizations.of(context)!.logout),
+          content: Text(AppLocalizations.of(context)!.are_you_sure),
+          actions: [
+            TextButton(
+              child: Text(AppLocalizations.of(context)!.yes),
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+            ),
+            TextButton(
+              child: Text(AppLocalizations.of(context)!.no),
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+            ),
+          ],
+        );
+      },
+    );
+    if (clearedConf ?? false) {
+      await cleared();
+    }
+  }
+}
